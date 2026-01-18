@@ -35,8 +35,6 @@ const flags = [];
 /* =======================
    HELPER FUNCTIONS
 ======================= */
-
-// Random position safely inside circle
 function randomPointInCircle(radius) {
   const angle = Math.random() * Math.PI * 2;
   const r = Math.sqrt(Math.random()) * (radius - FLAG_RADIUS - 5);
@@ -46,7 +44,6 @@ function randomPointInCircle(radius) {
   };
 }
 
-// Check if flag exits through the gap
 function checkElimination(flag) {
   const dx = flag.x - CENTER_X;
   const dy = flag.y - CENTER_Y;
@@ -67,46 +64,60 @@ function checkElimination(flag) {
 }
 
 /* =======================
-   CREATE FLAGS
+   CREATE/RESET FLAGS
 ======================= */
-flagNames.forEach(name => {
-  const img = new Image();
-  img.src = `flags/${name}.png`;
+function initFlags() {
+  flags.length = 0; // clear old flags
+  winnerAnnounced = false;
 
-  let pos = randomPointInCircle(RADIUS);
-  let safe = false;
-  let tries = 0;
+  // Hide winner popup immediately and reset animation
+  const popup = document.getElementById("winner-popup");
+  popup.style.opacity = "0";
+  popup.style.transform = "translate(-50%, -50%) scale(0)";
+  popup.style.animation = "none";  // Reset animation so it doesn't replay
 
-  while (!safe && tries < 50) {
-    safe = true;
-    for (const f of flags) {
-      const dx = pos.x - f.x;
-      const dy = pos.y - f.y;
-      if (Math.sqrt(dx * dx + dy * dy) < FLAG_RADIUS * 2) {
-        safe = false;
-        pos = randomPointInCircle(RADIUS);
-        break;
+  // Re-create flags
+  flagNames.forEach(name => {
+    const img = new Image();
+    img.src = `flags/${name}.png`;
+
+    let pos = randomPointInCircle(RADIUS);
+    let safe = false;
+    let tries = 0;
+
+    while (!safe && tries < 50) {
+      safe = true;
+      for (const f of flags) {
+        const dx = pos.x - f.x;
+        const dy = pos.y - f.y;
+        if (Math.sqrt(dx * dx + dy * dy) < FLAG_RADIUS * 2) {
+          safe = false;
+          pos = randomPointInCircle(RADIUS);
+          break;
+        }
       }
+      tries++;
     }
-    tries++;
-  }
 
-  const angle = Math.random() * Math.PI * 2;
+    const angle = Math.random() * Math.PI * 2;
 
-  flags.push({
-    name,
-    img,
-    x: pos.x,
-    y: pos.y,
-    vx: Math.cos(angle) * SPEED,
-    vy: Math.sin(angle) * SPEED
+    flags.push({
+      name,
+      img,
+      x: pos.x,
+      y: pos.y,
+      vx: Math.cos(angle) * SPEED,
+      vy: Math.sin(angle) * SPEED
+    });
   });
-});
+}
+
+// Initialize flags at start
+initFlags();
 
 /* =======================
    DRAW FUNCTIONS
 ======================= */
-
 function drawCircle() {
   ctx.beginPath();
   ctx.arc(
@@ -135,6 +146,12 @@ function drawFlags() {
 ======================= */
 function showWinner(name) {
   const popup = document.getElementById("winner-popup");
+
+  // Reset animation to restart it properly
+  popup.style.animation = "none";
+  // Trigger reflow to allow animation restart
+  void popup.offsetHeight;
+
   popup.textContent = `Winner: ${name.toUpperCase()}!`;
   popup.style.opacity = "1";
   popup.style.transform = "translate(-50%, -50%) scale(1.2)";
@@ -145,17 +162,21 @@ function showWinner(name) {
     popup.style.transform = "translate(-50%, -50%) scale(1)";
   }, 800);
 
-  // Fade out after 5 seconds
+  // Fade out after 3 seconds
   setTimeout(() => {
     popup.style.opacity = "0";
     popup.style.transform = "translate(-50%, -50%) scale(0)";
-  }, 5000);
+  }, 3000);
+
+  // Restart game after 3 seconds
+  setTimeout(() => {
+    initFlags();
+  }, 3000);
 }
 
 /* =======================
    PHYSICS
 ======================= */
-
 function moveFlags() {
   for (let i = flags.length - 1; i >= 0; i--) {
     const f = flags[i];
@@ -168,14 +189,11 @@ function moveFlags() {
     const dist = Math.sqrt(dx * dx + dy * dy);
 
     if (dist > RADIUS) {
-
-      // Check elimination first
       if (checkElimination(f)) {
         flags.splice(i, 1);
         continue;
       }
 
-      // Otherwise bounce only if outside the gap
       let angleToCenter = Math.atan2(dy, dx);
       if (angleToCenter < 0) angleToCenter += Math.PI * 2;
 
@@ -185,14 +203,12 @@ function moveFlags() {
       if (end < 0) end += Math.PI * 2;
 
       if (!(angleToCenter > start && angleToCenter < end)) {
-        // Bounce along normal
         const nx = dx / dist;
         const ny = dy / dist;
         const dot = f.vx * nx + f.vy * ny;
         f.vx -= 2 * dot * nx;
         f.vy -= 2 * dot * ny;
 
-        // Push back inside
         f.x = CENTER_X + nx * (RADIUS - FLAG_RADIUS);
         f.y = CENTER_Y + ny * (RADIUS - FLAG_RADIUS);
       }
@@ -234,7 +250,6 @@ function handleCollisions() {
 /* =======================
    GAME LOOP
 ======================= */
-
 function gameLoop() {
   ctx.clearRect(0, 0, canvas.width, canvas.height);
   drawCircle();
